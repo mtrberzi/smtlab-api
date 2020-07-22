@@ -91,7 +91,7 @@ class BenchmarkAPI(Resource):
         db.session.commit()
 
     def delete(self, id):
-        Benchmark.query.filter_by(Benchmark.id == id).delete()
+        Benchmark.query.filter(Benchmark.id == id).delete()
         db.session.commit()
 
 api.add_resource(BenchmarkAPI, '/benchmarks/<int:id>', endpoint = 'benchmark')
