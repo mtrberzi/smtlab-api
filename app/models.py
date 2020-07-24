@@ -17,4 +17,4 @@ class Instance(db.Model):
         return {'id': self.id, 'name': self.name}
     
     def object_key(self):
-        return self.benchmark.name + "__" + self.name
+        return "instance{}.smt2".format(self.id)
