@@ -1,7 +1,8 @@
 import enum
 from app import db
+from sqlalchemy.sql import func
 
-class SolverResponseEnum(enum.Enum):\
+class SolverResponseEnum(enum.Enum):
     no_result = 0
     sat = 1
     unsat = 2
@@ -50,6 +51,8 @@ class Run(db.Model):
     arguments = db.Column(db.String(1024))
     performance = db.Column(db.Boolean)
     results = db.relationship('Result', backref='run', lazy='dynamic', cascade='all, delete-orphan')
+    description = db.Column(db.String(1024), default="")
+    start_date = db.Column(db.DateTime(timezone=True), server_default=func.now())
 
     def json_obj_summary(self):
         return {'id': self.id, 'benchmark_id': self.benchmark.id, 'solver_id': self.solver.id, 'arguments': self.arguments, 'performance': self.performance}

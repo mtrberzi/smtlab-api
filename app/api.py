@@ -197,8 +197,12 @@ class RunListAPI(Resource):
             args = json_data["arguments"]
         else:
             args = solver.default_arguments
+        if "description" in json_data:
+            description = json_data["description"]
+        else:
+            description = ""
         performance = json_data["performance"]
-        run = Run(benchmark=benchmark, solver=solver, arguments=args, performance=performance)
+        run = Run(benchmark=benchmark, solver=solver, arguments=args, performance=performance, description=description)
         db.session.add(run)
         db.commit()
         # send message to scheduler
