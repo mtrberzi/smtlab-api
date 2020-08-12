@@ -250,13 +250,23 @@ api.add_resource(RunAPI, '/runs/<int:id>', endpoint = 'run')
 
 class RunResultListAPI(Resource):
     def get(self, id):
-        abort(500) # TODO
+        run = Run.query.get(id)
+        if run is None:
+            abort(404)
+        results = [r.json_obj_summary() for r in run.results.all()]
+        return results
 
     def post(self, id):
         json_data = request.get_json()
         if not json_data:
             abort(400, description="No input data specified")
-        # TODO
-        abort(500)
+        new_result_objs = []
+        for result in json_data:
+            if 'instance_id' not in result or 'result' not in result or 'stdout' not in result or 'runtime' not in result:
+                abort(400, description="Result object must specify 'instance_id', 'result', 'stdout', and 'runtime'")
+            db_result = Result(run_id=id, instance_id = result['instance_id'], result=SolverResponseEnum[result['result']], stdout=result['stdout'], runtime=result['runtime'])
+            db.add(db_result)
+        db.commit()
+        return [x.json_obj_summary() for x in new_result_objs]
 
 api.add_resource(RunResultListAPI, '/runs/<int:id>/results', endpoint = 'run_result_list')

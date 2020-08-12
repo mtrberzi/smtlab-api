@@ -64,3 +64,6 @@ class Result(db.Model):
     result = db.Column(db.Enum(SolverResponseEnum), default=SolverResponseEnum.no_result)
     stdout = db.Column(db.UnicodeText())
     runtime = db.Column(db.Integer) # running time in milliseconds
+
+    def json_obj_summary(self):
+        return {'id': self.id, 'run_id': self.run_id, 'instance_id': self.instance_id, 'result': self.result.name, 'stdout': self.stdout, 'runtime': self.runtime}
