@@ -204,7 +204,7 @@ class RunListAPI(Resource):
         performance = json_data["performance"]
         run = Run(benchmark=benchmark, solver=solver, arguments=args, performance=performance, description=description)
         db.session.add(run)
-        db.commit()
+        db.session.commit()
         # send message to scheduler
         try:
             c = stomp.Connection(app.config['QUEUE_CONNECTION'])
@@ -228,6 +228,10 @@ class RunAPI(Resource):
 
     # run control
     def post(self, id):
+        run = Run.query.get(id)
+        if run is None:
+            abort(404)
+        
         json_data = request.get_json()
         if not json_data:
             abort(400, description="No input data provided")
@@ -265,8 +269,8 @@ class RunResultListAPI(Resource):
             if 'instance_id' not in result or 'result' not in result or 'stdout' not in result or 'runtime' not in result:
                 abort(400, description="Result object must specify 'instance_id', 'result', 'stdout', and 'runtime'")
             db_result = Result(run_id=id, instance_id = result['instance_id'], result=SolverResponseEnum[result['result']], stdout=result['stdout'], runtime=result['runtime'])
-            db.add(db_result)
-        db.commit()
+            db.session.add(db_result)
+        db.session.commit()
         return [x.json_obj_summary() for x in new_result_objs]
 
 api.add_resource(RunResultListAPI, '/runs/<int:id>/results', endpoint = 'run_result_list')
