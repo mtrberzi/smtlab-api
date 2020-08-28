@@ -2,7 +2,7 @@ from flask import Flask, request
 from flask_restful import Api, Resource, abort
 import json
 import base64
-import stomp
+import boto3
 
 from app import app, db
 from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum
@@ -62,10 +62,12 @@ class BenchmarkAPI(Resource):
                 abort(400, description="Instance must specify 'name' and 'body'")
             instance = Instance(name=inst['name'], benchmark=benchmark)
             db.session.add(instance)
-            instance_data.append( (instance, inst['body'].encode('utf-8')) )
+            instance_data.append( (instance, inst['body']) )
         db.session.commit()
         for instance, body in instance_data:
-            objstor.put(app.config['OBJECT_STORAGE_BENCHMARK_BUCKET'], instance.object_key(), body)
+            # filter out (get-model): calling this automatically is an error if the answer is "UNSAT"
+            sanitized_body = body.replace("(get-model)", "")
+            objstor.put(app.config['OBJECT_STORAGE_BENCHMARK_BUCKET'], instance.object_key(), sanitized_body.encode('UTF-8'))
         response = []
         for instance, body in instance_data:
             response.append(instance.json_obj_summary())
@@ -207,13 +209,13 @@ class RunListAPI(Resource):
         db.session.commit()
         # send message to scheduler
         try:
-            c = stomp.Connection(app.config['QUEUE_CONNECTION'])
-            c.connect(app.config['QUEUE_USERNAME'], app.config['QUEUE_PASSWORD'], wait=True)
+            client = boto3.resource('sqs', endpoint_url=app.config['QUEUE_URL'], region_name='elasticmq', aws_access_key_id='x', aws_secret_access_key='x', use_ssl=False)
+            queue = client.get_queue_by_name(QueueName="scheduler")
             scheduler_msg = {'action': 'schedule', 'id': run.id}
-            c.send(body=json.dumps(scheduler_msg), destination='queue/scheduler')
-            c.disconnect()
+            queue.send_message(MessageBody=json.dumps(scheduler_msg))
         except Exception as e:
-            pass
+            print(e)
+            abort(500, description="Server-side message queue error")
         return run.json_obj_summary()
         
 api.add_resource(RunListAPI, '/runs', endpoint='run_list')
@@ -239,12 +241,11 @@ class RunAPI(Resource):
             abort(400, description="Run control must specify 'action'")
         action = json_data['action']
         if action == "reschedule":
+            scheduler_msg = {'action': 'schedule', 'id': run.id}
             try:
-                c = stomp.Connection(app.config['QUEUE_CONNECTION'])
-                c.connect(app.config['QUEUE_USERNAME'], app.config['QUEUE_PASSWORD'], wait=True)
-                scheduler_msg = {'action': 'schedule', 'id': run.id}
-                c.send(body=json.dumps(scheduler_msg), destination='queue/scheduler')
-                c.disconnect()
+                c = boto3.resource('sqs', endpoint_url=app.config['QUEUE_URL'], region_name='elasticmq', aws_access_key_id='x', aws_secret_access_key='x', use_ssl=False)
+                queue = c.get_queue_by_name(QueueName='scheduler')
+                response = queue.send_message(MessageBody=json.dumps(scheduler_msg))
             except Exception as e:
                 abort(500)
         else:
