@@ -10,6 +10,14 @@ class SolverResponseEnum(enum.Enum):
     unknown = 4
     error = 5
 
+class ValidationEnum(enum.Enum):
+    no_result = 0
+    valid = 1
+    invalid = 2
+    timeout = 3
+    unknown = 4
+    error = 5
+    
 class Benchmark(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64))
@@ -64,6 +72,20 @@ class Result(db.Model):
     result = db.Column(db.Enum(SolverResponseEnum), default=SolverResponseEnum.no_result)
     stdout = db.Column(db.UnicodeText())
     runtime = db.Column(db.Integer) # running time in milliseconds
+    validation_results = db.relationship('ValidationResult', backref='result', lazy='dynamic', cascade='all, delete-orphan')
 
     def json_obj_summary(self):
-        return {'id': self.id, 'run_id': self.run_id, 'instance_id': self.instance_id, 'result': self.result.name, 'stdout': self.stdout, 'runtime': self.runtime}
+        return {'id': self.id, 'run_id': self.run_id, 'instance_id': self.instance_id, 'result': self.result.name, 'runtime': self.runtime}
+    
+    def json_obj_details(self):
+        return {'id': self.id, 'run_id': self.run_id, 'instance_id': self.instance_id, 'result': self.result.name, 'runtime': self.runtime, 'stdout': self.stdout}
+
+class ValidationResult(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    result_id = db.Column(db.Integer, db.ForeignKey('result.id'))
+    solver_id = db.column(db.Integer, db.ForeignKey('solver.id'))
+    validation = db.Column(db.Enum(ValidationEnum), default=ValidationEnum.no_result)
+    stdout = db.Column(db.UnicodeText())
+
+    def json_obj_summary(self):
+        return {'id': self.id, 'result_id': self.result_id, 'solver_id': self.solver_id, 'validation': self.validation.name, 'stdout': self.stdout}

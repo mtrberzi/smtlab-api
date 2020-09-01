@@ -5,7 +5,7 @@ import base64
 import boto3
 
 from app import app, db
-from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum
+from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum, ValidationResult, ValidationEnum
 from app.storage import ObjectStorageError, FileSystemObjectStorage
 
 def get_object_storage_client():
@@ -271,7 +271,51 @@ class RunResultListAPI(Resource):
                 abort(400, description="Result object must specify 'instance_id', 'result', 'stdout', and 'runtime'")
             db_result = Result(run_id=id, instance_id = result['instance_id'], result=SolverResponseEnum[result['result']], stdout=result['stdout'], runtime=result['runtime'])
             db.session.add(db_result)
+            new_result_objs.append(db_result)
         db.session.commit()
         return [x.json_obj_summary() for x in new_result_objs]
 
 api.add_resource(RunResultListAPI, '/runs/<int:id>/results', endpoint = 'run_result_list')
+
+class RunResultAPI(Resource):
+    def get(self, id):
+        result = Result.query.get(id)
+        if result is None:
+            abort(404)
+        details = result.json_obj_details()
+        validations = []
+        # query for validations:
+        # - all validation results directly validating this one
+        # - all results from validation solvers on the same instance, in other runs
+        for v in result.validation_results.all():
+            validations.append({'solver_id': v.solver_id, 'validation': v.validation.name})
+        for rr, rn, rs in db.session.query(Result, Run, Solver).filter(Result.instance_id == result.instance_id).filter(Result.run_id != result.run_id).filter(Result.run_id == Run.id).filter(Run.solver_id == Solver.id).filter(Solver.validation_solver==True).all():
+            validations.append({'solver_id': rs.id, 'result': rr.result.name})
+        details['validations'] = validations
+        return details
+
+api.add_resource(RunResultAPI, '/results/<int:id>', endpoint = 'result_details')
+
+class ValidationResultAPI(Resource):
+    def get(self, id):
+        result = Result.query.get(id)
+        if result is None:
+            abort(404)
+        validations = [v.json_obj_summary() for v in run.validation_results.all()]
+        return validations
+
+    def post(self, id):
+        json_data = request.get_json()
+        if not json_data:
+            abort(400, description="No input data specified")
+        new_validation_objs = []
+        for validation_result in json_data:
+            if 'solver_id' not in validation_result or 'validation' not in validation_result or 'stdout' not in validation_result:
+                abort(400, description="Validation result object must specify 'solver_id', 'validation', and 'stdout'")
+            db_validation_result = ValidationResult(result_id=id, solver_id=validation_result['solver_id'], validation=ValidationEnum[validation_result["validation"]], stdout=validation_result["stdout"])
+            db.session.add(db_validation_result)
+            new_validation_objs.append(db_validation_result)
+        db.session.commit()
+        return [v.json_obj_summary() for v in new_validation_objs]
+
+api.add_resource(ValidationResultAPI, '/results/<int:id>/validation', endpoint = 'validation_results')
