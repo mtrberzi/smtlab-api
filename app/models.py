@@ -63,7 +63,7 @@ class Run(db.Model):
     start_date = db.Column(db.DateTime(timezone=True), server_default=func.now())
 
     def json_obj_summary(self):
-        return {'id': self.id, 'benchmark_id': self.benchmark.id, 'solver_id': self.solver.id, 'arguments': self.arguments, 'performance': self.performance}
+        return {'id': self.id, 'benchmark_id': self.benchmark.id, 'solver_id': self.solver.id, 'arguments': self.arguments, 'performance': self.performance, 'description': self.description}
 
 class Result(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -83,7 +83,7 @@ class Result(db.Model):
 class ValidationResult(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     result_id = db.Column(db.Integer, db.ForeignKey('result.id'))
-    solver_id = db.column(db.Integer, db.ForeignKey('solver.id'))
+    solver_id = db.Column(db.Integer, db.ForeignKey('solver.id'))
     validation = db.Column(db.Enum(ValidationEnum), default=ValidationEnum.no_result)
     stdout = db.Column(db.UnicodeText())
 
