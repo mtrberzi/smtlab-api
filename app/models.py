@@ -60,7 +60,7 @@ class Run(db.Model):
     performance = db.Column(db.Boolean)
     results = db.relationship('Result', backref='run', lazy='dynamic', cascade='all, delete-orphan')
     description = db.Column(db.String(1024), default="")
-    start_date = db.Column(db.DateTime(timezone=True), server_default=func.now())
+    start_date = db.Column(db.DateTime(timezone=True))
 
     def json_obj_summary(self):
         return {'id': self.id, 'benchmark_id': self.benchmark.id, 'solver_id': self.solver.id, 'arguments': self.arguments, 'performance': self.performance, 'description': self.description}

@@ -3,6 +3,7 @@ from flask_restful import Api, Resource, abort
 import json
 import base64
 import boto3
+import datetime
 
 from app import app, db
 from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum, ValidationResult, ValidationEnum
@@ -204,7 +205,7 @@ class RunListAPI(Resource):
         else:
             description = ""
         performance = json_data["performance"]
-        run = Run(benchmark=benchmark, solver=solver, arguments=args, performance=performance, description=description)
+        run = Run(benchmark=benchmark, solver=solver, arguments=args, performance=performance, description=description, start_date=datetime.now())
         db.session.add(run)
         db.session.commit()
         # send message to scheduler
