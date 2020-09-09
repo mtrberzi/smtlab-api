@@ -63,7 +63,7 @@ class Run(db.Model):
     start_date = db.Column(db.DateTime(timezone=True))
 
     def json_obj_summary(self):
-        return {'id': self.id, 'benchmark_id': self.benchmark.id, 'solver_id': self.solver.id, 'arguments': self.arguments, 'performance': self.performance, 'description': self.description}
+        return {'id': self.id, 'benchmark_id': self.benchmark.id, 'solver_id': self.solver.id, 'arguments': self.arguments, 'performance': self.performance, 'description': self.description, 'start_date': self.start_date.isoformat()}
 
 class Result(db.Model):
     id = db.Column(db.Integer, primary_key=True)
