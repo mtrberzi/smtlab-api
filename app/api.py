@@ -1,12 +1,14 @@
-from flask import Flask, request
+from flask import Flask, request, g
 from flask_restful import Api, Resource, abort
+from flask_httpauth import HTTPBasicAuth
 import json
 import base64
 import boto3
 import datetime
+from functools import wraps
 
 from app import app, db
-from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum, ValidationResult, ValidationEnum
+from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum, ValidationResult, ValidationEnum, User, PermissionEnum
 from app.storage import ObjectStorageError, FileSystemObjectStorage
 
 def get_object_storage_client():
@@ -17,8 +19,31 @@ def get_object_storage_client():
         raise ValueError("Unknown object storage type {}".format(storage_type))
 
 api = Api(app)
+auth = HTTPBasicAuth()
 
-class BenchmarkListAPI(Resource):    
+def needs_permission(perm):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not g.user.has_permission(perm):
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+@auth.verify_password
+def verify_password(username_or_token, password):
+    user = User.verify_auth_token(username_or_token)
+    if not user:
+        user = User.query.filter_by(username=username_or_token).first()
+        if not user or not user.verify_password(password):
+            return False
+    g.user = user
+    return True
+
+class BenchmarkListAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self):
         all_benchmarks = Benchmark.query.all()
         response = []
@@ -26,6 +51,8 @@ class BenchmarkListAPI(Resource):
             response.append(benchmark.json_obj())
         return response
 
+    @auth.login_required
+    @needs_permission(PermissionEnum.upload_benchmark)
     def post(self):
         json_data = request.get_json()
         if not json_data:
@@ -40,6 +67,8 @@ class BenchmarkListAPI(Resource):
 api.add_resource(BenchmarkListAPI, '/benchmarks', endpoint = 'benchmark_list')
 
 class BenchmarkAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         benchmark = Benchmark.query.get(id)
         if benchmark is None:
@@ -48,6 +77,8 @@ class BenchmarkAPI(Resource):
             return benchmark.json_obj()
 
     # Upload instances
+    @auth.login_required
+    @needs_permission(PermissionEnum.upload_benchmark)
     def post(self, id):
         benchmark = Benchmark.query.get(id)
         if benchmark is None:
@@ -74,6 +105,8 @@ class BenchmarkAPI(Resource):
             response.append(instance.json_obj_summary())
         return response
 
+    @auth.login_required
+    @needs_permission(PermissionEnum.upload_benchmark)
     def delete(self, id):
         Benchmark.query.filter(Benchmark.id == id).delete()
         db.session.commit()
@@ -82,6 +115,8 @@ class BenchmarkAPI(Resource):
 api.add_resource(BenchmarkAPI, '/benchmarks/<int:id>', endpoint = 'benchmark')
 
 class BenchmarkRunsAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         benchmark = Benchmark.query.get(id)
         if benchmark is None:
@@ -93,6 +128,8 @@ class BenchmarkRunsAPI(Resource):
 api.add_resource(BenchmarkRunsAPI, '/benchmarks/<int:id>/runs', endpoint = 'benchmark_runs')
 
 class InstanceListAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         benchmark = Benchmark.query.get(id)
         if benchmark is None:
@@ -104,6 +141,8 @@ class InstanceListAPI(Resource):
 api.add_resource(InstanceListAPI, '/benchmarks/<int:id>/instances', endpoint = 'instance_list')
 
 class InstanceAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         instance = Instance.query.get(id)
         if instance is None:
@@ -114,6 +153,8 @@ class InstanceAPI(Resource):
         inst['body'] = objstor.get(app.config['OBJECT_STORAGE_BENCHMARK_BUCKET'], instance.object_key()).decode('utf-8')
         return inst
 
+    @auth.login_required
+    @needs_permission(PermissionEnum.upload_benchmark)
     def put(self, id):
         abort(500) # TODO
         json_data = request.get_json()
@@ -123,6 +164,8 @@ class InstanceAPI(Resource):
 api.add_resource(InstanceAPI, '/instances/<int:id>', endpoint = 'instance')
 
 class SolverListAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self):
         all_solvers = Solver.query.all()
         response = []
@@ -130,6 +173,8 @@ class SolverListAPI(Resource):
             response.append(solver.json_obj_summary())
         return response
 
+    @auth.login_required
+    @needs_permission(PermissionEnum.upload_solver)
     def post(self):
         json_data = request.get_json()
         if not json_data:
@@ -152,6 +197,8 @@ class SolverListAPI(Resource):
 api.add_resource(SolverListAPI, '/solvers', endpoint = 'solver_list')
 
 class SolverAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         solver = Solver.query.get(id)
         if solver is None:
@@ -165,6 +212,8 @@ class SolverAPI(Resource):
 api.add_resource(SolverAPI, '/solvers/<int:id>', endpoint = 'solver')
 
 class SolverRunAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         solver = Solver.query.get(id)
         if solver is None:
@@ -176,6 +225,8 @@ class SolverRunAPI(Resource):
 api.add_resource(SolverRunAPI, '/solvers/<int:id>/runs', endpoint = 'solver_runs')
 
 class RunListAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self):
         all_runs = Run.query.all()
         response = []
@@ -184,6 +235,8 @@ class RunListAPI(Resource):
         return response
 
     # start new run
+    @auth.login_required
+    @needs_permission(PermissionEnum.start_run)
     def post(self):
         json_data = request.get_json()
         if not json_data:
@@ -223,6 +276,8 @@ api.add_resource(RunListAPI, '/runs', endpoint='run_list')
 
 class RunAPI(Resource):
     # get run summary
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         run = Run.query.get(id)
         if run is None:
@@ -230,6 +285,8 @@ class RunAPI(Resource):
         return run.json_obj_summary()
 
     # run control
+    @auth.login_required
+    @needs_permission(PermissionEnum.start_run)
     def post(self, id):
         run = Run.query.get(id)
         if run is None:
@@ -255,6 +312,8 @@ class RunAPI(Resource):
 api.add_resource(RunAPI, '/runs/<int:id>', endpoint = 'run')
 
 class RunResultListAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         run = Run.query.get(id)
         if run is None:
@@ -262,6 +321,8 @@ class RunResultListAPI(Resource):
         results = [r.json_obj_summary() for r in run.results.all()]
         return results
 
+    @auth.login_required
+    @needs_permission(PermissionEnum.post_results)
     def post(self, id):
         json_data = request.get_json()
         if not json_data:
@@ -279,6 +340,8 @@ class RunResultListAPI(Resource):
 api.add_resource(RunResultListAPI, '/runs/<int:id>/results', endpoint = 'run_result_list')
 
 class RunResultAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         result = Result.query.get(id)
         if result is None:
@@ -298,6 +361,8 @@ class RunResultAPI(Resource):
 api.add_resource(RunResultAPI, '/results/<int:id>', endpoint = 'result_details')
 
 class ValidationResultAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
     def get(self, id):
         result = Result.query.get(id)
         if result is None:
@@ -305,6 +370,8 @@ class ValidationResultAPI(Resource):
         validations = [v.json_obj_summary() for v in run.validation_results.all()]
         return validations
 
+    @auth.login_required
+    @needs_permission(PermissionEnum.post_results)
     def post(self, id):
         json_data = request.get_json()
         if not json_data:
@@ -320,3 +387,69 @@ class ValidationResultAPI(Resource):
         return [v.json_obj_summary() for v in new_validation_objs]
 
 api.add_resource(ValidationResultAPI, '/results/<int:id>/validation', endpoint = 'validation_results')
+
+class UserCreationAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.admin_user)
+    def post(self):
+        json_data = request.get_json()
+        if not json_data:
+            abort(400, description="No input data specified")
+        if 'username' not in json_data or 'password' not in json_data or 'permissions' not in json_data:
+            abort(400, description="User creation must specify 'username', 'password', and 'permissions'")
+        existing_user = User.query.filter_by(username=json_data['username']).first()
+        if existing_user is not None:
+            abort(400, description="User exists")
+        user = User(username=json_data['username'])
+        user.hash_password(json_data['password'])
+        for perm in json_data['permissions']:
+            user.permissions.append(Permission(permission=PermissionEnum[perm]))
+        db.session.add(user)
+        db.session.commit()
+        return user.json_obj_summary()
+
+api.add_resource(UserCreationAPI, '/users/create', endpoint = 'create_user')
+
+class ChangePasswordAPI(Resource):
+    @auth.login_required
+    def post(self):
+        json_data = request.get_json()
+        if not json_data:
+            abort(400, description="No input data specified")
+        if 'username' not in json_data or 'password' not in json_data:
+            abort(400, description="Request body must specify 'username' and 'password'")
+        if json_data['username'] == g.user.username:
+            needed_perm = PermissionEnum.change_password
+        else:
+            needed_perm = PermissionEnum.change_other_password
+        if not g.user.has_permission(needed_perm):
+            abort(403)
+        user = User.query.filter_by(username=json_data['username']).first()
+        if user is None:
+            abort(404)
+        user.hash_password(json_data['password'])
+        db.session.add(user)
+        db.session.commit()
+
+api.add_resource(ChangePasswordAPI, '/users/change_password', endpoint = 'change_password')
+
+class GrantPermissionsAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.admin_user)
+    def post(self):
+        json_data = request.get_json()
+        if not json_data:
+            abort(400, description="No input data specified")
+        if 'username' not in json_data or 'permissions' not in json_data:
+            abort(400, description="Request body must specify 'username' and 'permissions'")
+        user = User.query.filter_by(username=json_data['username']).first()
+        if not user:
+            abort(404)
+        new_perms = [PermissionEnum[x] for x in json_data['permissions']]
+        existing_perms = [x.permission for x in user.permissions]
+        for new_perm in new_perms:
+            if new_perm not in existing_perms:
+                user.permissions.append(new_perm)
+        db.session.add(user)
+        db.session.commit()
+        
