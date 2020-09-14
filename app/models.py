@@ -114,7 +114,7 @@ class User(db.Model):
     permissions = db.relationship('Permission', backref='user', cascade='all, delete-orphan')
 
     def json_obj_summary(self):
-        return {'id': self.id, 'username': self.username, 'permissions': self.permissions}
+        return {'id': self.id, 'username': self.username, 'permissions': [x.json_obj_summary() for x in self.permissions]}
 
     def hash_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -143,3 +143,6 @@ class Permission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     permission = db.Column(db.Enum(PermissionEnum), default=PermissionEnum.invalid_perm)
+
+    def json_obj_summary(self):
+        return self.permission.name

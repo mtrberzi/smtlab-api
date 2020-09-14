@@ -8,7 +8,7 @@ import datetime
 from functools import wraps
 
 from app import app, db
-from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum, ValidationResult, ValidationEnum, User, PermissionEnum
+from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum, ValidationResult, ValidationEnum, User, Permission, PermissionEnum
 from app.storage import ObjectStorageError, FileSystemObjectStorage
 
 def get_object_storage_client():
@@ -431,6 +431,8 @@ class ChangePasswordAPI(Resource):
         db.session.add(user)
         db.session.commit()
 
+        return user.json_obj_summary()
+
 api.add_resource(ChangePasswordAPI, '/users/change_password', endpoint = 'change_password')
 
 class GrantPermissionsAPI(Resource):
@@ -452,4 +454,40 @@ class GrantPermissionsAPI(Resource):
                 user.permissions.append(new_perm)
         db.session.add(user)
         db.session.commit()
-        
+
+        return user.json_obj_summary()
+api.add_resource(GrantPermissionsAPI, '/users/permissions', endpoint = 'grant_permissions')
+
+valid_queues = ['scheduler', 'performance', 'regression']
+
+class MessageQueueAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.message_queue)
+    def get(self, queue):
+        if queue not in valid_queues:
+            abort(404)
+        client = boto3.resource('sqs', endpoint_url=app.config['QUEUE_URL'], region_name='elasticmq', aws_access_key_id='x', aws_secret_access_key='x', use_ssl=False)
+        queue = client.get_queue_by_name(QueueName=queue)
+        msgs = queue.receive_messages(MaxNumberOfMessages=1, WaitTimeSeconds=0)
+        if len(msgs) == 0:
+            return []
+        else:
+            msg = msgs[0]
+            body = msg.body
+            msg.delete()
+            return body
+
+    @auth.login_required
+    @needs_permission(PermissionEnum.message_queue)
+    def post(self, queue):
+        if queue not in valid_queues:
+            abort(404)
+        json_data = request.get_json()
+        if not json_data:
+            abort(400, description="No input data specified")
+        client = boto3.resource('sqs', endpoint_url=app.config['QUEUE_URL'], region_name='elasticmq', aws_access_key_id='x', aws_secret_access_key='x', use_ssl=False)
+        queue = client.get_queue_by_name(QueueName=queue)
+        queue.send_message(MessageBody=json.dumps(json_data))
+        return []
+
+api.add_resource(MessageQueueAPI, '/queues/<queue>', endpoint = 'message_queue')
