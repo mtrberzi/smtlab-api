@@ -93,10 +93,10 @@ class Result(db.Model):
     node_name = db.Column(db.String(256), default="")
 
     def json_obj_summary(self):
-        return {'id': self.id, 'run_id': self.run_id, 'instance_id': self.instance_id, 'result': self.result.name, 'runtime': self.runtime}
+        return {'id': self.id, 'run_id': self.run_id, 'instance_id': self.instance_id, 'result': self.result.name, 'runtime': self.runtime, 'node_name': self.node_name}
     
     def json_obj_details(self):
-        return {'id': self.id, 'run_id': self.run_id, 'instance_id': self.instance_id, 'result': self.result.name, 'runtime': self.runtime, 'stdout': self.stdout}
+        return {'id': self.id, 'run_id': self.run_id, 'instance_id': self.instance_id, 'result': self.result.name, 'runtime': self.runtime, 'stdout': self.stdout, 'node_name': self.node_name}
 
 class ValidationResult(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -107,7 +107,7 @@ class ValidationResult(db.Model):
     node_name = db.Column(db.String(256), default="")
 
     def json_obj_summary(self):
-        return {'id': self.id, 'result_id': self.result_id, 'solver_id': self.solver_id, 'validation': self.validation.name, 'stdout': self.stdout}
+        return {'id': self.id, 'result_id': self.result_id, 'solver_id': self.solver_id, 'validation': self.validation.name, 'stdout': self.stdout, 'node_name': self.node_name}
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
