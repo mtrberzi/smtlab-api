@@ -331,7 +331,11 @@ class RunResultListAPI(Resource):
         for result in json_data:
             if 'instance_id' not in result or 'result' not in result or 'stdout' not in result or 'runtime' not in result:
                 abort(400, description="Result object must specify 'instance_id', 'result', 'stdout', and 'runtime'")
-            db_result = Result(run_id=id, instance_id = result['instance_id'], result=SolverResponseEnum[result['result']], stdout=result['stdout'], runtime=result['runtime'])
+            if 'node_name' in result:
+                node_name = result['node_name']
+            else:
+                node_name = ""
+            db_result = Result(run_id=id, instance_id = result['instance_id'], result=SolverResponseEnum[result['result']], stdout=result['stdout'], runtime=result['runtime'], node_name=node_name)
             db.session.add(db_result)
             new_result_objs.append(db_result)
         db.session.commit()
@@ -380,7 +384,11 @@ class ValidationResultAPI(Resource):
         for validation_result in json_data:
             if 'solver_id' not in validation_result or 'validation' not in validation_result or 'stdout' not in validation_result:
                 abort(400, description="Validation result object must specify 'solver_id', 'validation', and 'stdout'")
-            db_validation_result = ValidationResult(result_id=id, solver_id=validation_result['solver_id'], validation=ValidationEnum[validation_result["validation"]], stdout=validation_result["stdout"])
+            if 'node_name' in validation_result:
+                node_name = validation_result['node_name']
+            else:
+                node_name = ""
+            db_validation_result = ValidationResult(result_id=id, solver_id=validation_result['solver_id'], validation=ValidationEnum[validation_result["validation"]], stdout=validation_result["stdout"], node_name=node_name)
             db.session.add(db_validation_result)
             new_validation_objs.append(db_validation_result)
         db.session.commit()
@@ -475,7 +483,7 @@ class MessageQueueAPI(Resource):
             msg = msgs[0]
             body = msg.body
             msg.delete()
-            return body
+            return [body]
 
     @auth.login_required
     @needs_permission(PermissionEnum.message_queue)

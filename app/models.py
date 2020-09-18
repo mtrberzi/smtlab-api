@@ -90,6 +90,7 @@ class Result(db.Model):
     stdout = db.Column(db.UnicodeText())
     runtime = db.Column(db.Integer) # running time in milliseconds
     validation_results = db.relationship('ValidationResult', backref='result', lazy='dynamic', cascade='all, delete-orphan')
+    node_name = db.Column(db.String(256), default="")
 
     def json_obj_summary(self):
         return {'id': self.id, 'run_id': self.run_id, 'instance_id': self.instance_id, 'result': self.result.name, 'runtime': self.runtime}
@@ -103,6 +104,7 @@ class ValidationResult(db.Model):
     solver_id = db.Column(db.Integer, db.ForeignKey('solver.id'))
     validation = db.Column(db.Enum(ValidationEnum), default=ValidationEnum.no_result)
     stdout = db.Column(db.UnicodeText())
+    node_name = db.Column(db.String(256), default="")
 
     def json_obj_summary(self):
         return {'id': self.id, 'result_id': self.result_id, 'solver_id': self.solver_id, 'validation': self.validation.name, 'stdout': self.stdout}
