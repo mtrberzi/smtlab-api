@@ -31,6 +31,15 @@ def needs_permission(perm):
         return decorated_function
     return decorator
 
+@auth.error_handler
+def auth_error(status):
+    if status == 401:
+        return "Authentication required", 403
+    elif status == 403:
+        return "Insufficient privileges", 403
+    else:
+        return "Authentication required", 403
+
 @auth.verify_password
 def verify_password(username_or_token, password):
     user = User.verify_auth_token(username_or_token)
