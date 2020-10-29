@@ -178,7 +178,7 @@ class InstanceLinkingAPI(Resource):
         db.session.commit()
         return ('', 204)
 
-api.add_resource(InstanceLinkingAPI, '/benchmarks/<int:id>/instances/link' endpoint = 'instance_linking')
+api.add_resource(InstanceLinkingAPI, '/benchmarks/<int:id>/instances/link', endpoint = 'instance_linking')
 
 class InstanceAPI(Resource):
     @auth.login_required
