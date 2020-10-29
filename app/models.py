@@ -148,3 +148,8 @@ class Permission(db.Model):
 
     def json_obj_summary(self):
         return self.permission.name
+
+class InstanceLink(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    benchmark_id = db.Column(db.Integer, db.ForeignKey('benchmark.id'))
+    instance_id = db.Column(db.Integer, db.ForeignKey('instance.id'))

@@ -8,7 +8,7 @@ import datetime
 from functools import wraps
 
 from app import app, db
-from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum, ValidationResult, ValidationEnum, User, Permission, PermissionEnum
+from app.models import Benchmark, Instance, Solver, Run, Result, SolverResponseEnum, ValidationResult, ValidationEnum, User, Permission, PermissionEnum, InstanceLink
 from app.storage import ObjectStorageError, FileSystemObjectStorage
 
 def get_object_storage_client():
@@ -146,8 +146,39 @@ class InstanceListAPI(Resource):
         instances = []
         for inst in benchmark.instances.all():
             instances.append(inst.json_obj_summary())
+        # query for and return linked instances
+        links = db.session.query(InstanceLink).filter(InstanceLink.benchmark_id == id).all()
+        linked_ids = []
+        for link in links:
+            linked_ids.append(link.instance_id)
+        linked_instances = db.session.query(Instance).filter(Instance.id.in_(linked_ids)).all()
+        for inst in linked_instances:
+            instances.append(inst.json_obj_summary())
         return instances
 api.add_resource(InstanceListAPI, '/benchmarks/<int:id>/instances', endpoint = 'instance_list')
+
+class InstanceLinkingAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.upload_benchmark)
+    def post(self, id):
+        json_data = request.get_json()
+        if not json_data:
+            abort(400, description="No input data provided")
+        benchmark = Benchmark.query.get(id)
+        if benchmark is None:
+            abort(404)
+        for instance_id in json_data:
+            instance = Instance.query.get(instance_id)
+            if instance is None:
+                abort(400, description=f"No instance with ID {instance_id}")
+            link = db.session.query(InstanceLink).filter(InstanceLink.benchmark_id == id).filter(InstanceLink.instance_id == instance_id).one_or_none()
+            if link is None:
+                link = InstanceLink(benchmark_id = id, instance_id = instance_id)
+                db.session.add(link)
+        db.session.commit()
+        return ('', 204)
+
+api.add_resource(InstanceLinkingAPI, '/benchmarks/<int:id>/instances/link' endpoint = 'instance_linking')
 
 class InstanceAPI(Resource):
     @auth.login_required
