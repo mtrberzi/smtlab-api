@@ -404,6 +404,35 @@ class RunResultAPI(Resource):
 
 api.add_resource(RunResultAPI, '/results/<int:id>', endpoint = 'result_details')
 
+class RunSummaryAPI(Resource):
+    @auth.login_required
+    @needs_permission(PermissionEnum.read)
+    def get(self, id):
+        run = Run.query.get(id)
+        if run is None:
+            abort(404)
+        summary = {"id": id, "results": 0, "total_time": 0, "total_time_minus_timeouts": 0, "sat": 0, "unsat": 0, "timeout": 0, "unknown": 0, "error": 0}
+        for result in run.results.all():
+            if result.result == SolverResponseEnum.no_result:
+                continue
+            summary["results"] += 1
+            summary["total_time"] += result.runtime
+            if result.result == SolverResponseEnum.timeout:
+                summary["timeout"] += 1
+            else:
+                summary["total_time_minus_timeouts"] += result.runtime
+                if result.result == SolverResponseEnum.sat:
+                    summary["sat"] += 1
+                elif result.result == SolverResponseEnum.unsat:
+                    summary["unsat"] += 1
+                elif result.result == SolverResponseEnum.unknown:
+                    summary["unknown"] += 1
+                elif result.result == SolverResponseEnum.error:
+                    summary["error"] += 1
+        return summary
+
+api.add_resource(RunSummaryAPI, '/runs/<int:id>/summary', endpoint = 'run_summary')
+
 class ValidationResultAPI(Resource):
     @auth.login_required
     @needs_permission(PermissionEnum.read)
@@ -411,7 +440,7 @@ class ValidationResultAPI(Resource):
         result = Result.query.get(id)
         if result is None:
             abort(404)
-        validations = [v.json_obj_summary() for v in run.validation_results.all()]
+        validations = [v.json_obj_summary() for v in result.validation_results.all()]
         return validations
 
     @auth.login_required
